@@ -8,8 +8,6 @@ export const ACTIVE_COLOR = 'rgba(154, 195, 69, 0.4)';
 export const CHECK_WARNING_COLOR = 'rgba(220, 30, 30, 0.6)';
 export const PIECE_ANIMATION_DURATION = 200;
 
-export const CHANCE_OF_BONUS = 0.25;
-
 export const CANVAS_SIZE = 600;
 export const SQUARE_SIZE = CANVAS_SIZE / 8;
 

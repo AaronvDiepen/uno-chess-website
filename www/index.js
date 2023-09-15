@@ -1,18 +1,17 @@
 import { JSInterface } from "random-chess";
-import { drawHistory, getImage, urlForPiece } from './utils.js';
 import {
-  BLACK_SQUARE_COLOR,
-  WHITE_SQUARE_COLOR,
-  SELECTED_COLOR,
-  HOVER_COLOR,
   ACTIVE_COLOR,
-  CHECK_WARNING_COLOR,
-  PIECE_ANIMATION_DURATION,
-  CHANCE_OF_BONUS,
+  BLACK_SQUARE_COLOR,
   CANVAS_SIZE,
+  CHECK_WARNING_COLOR,
+  HOVER_COLOR,
+  PIECES,
+  PIECE_ANIMATION_DURATION,
+  SELECTED_COLOR,
   SQUARE_SIZE,
-  PIECES
+  WHITE_SQUARE_COLOR
 } from "./constants.js";
+import { drawHistory, getImage, urlForPiece } from './utils.js';
 
 // Give the canvas room for all of our cells and a 1px border
 // around each of them.
@@ -194,26 +193,22 @@ function updateStatus() {
 
   switch (wasmInterface.js_status()) {
     case "in progress": {
-      if (awaitingMoveFrom == undefined) {
-        statusLabel.innerHTML = "<span id='dice' style='display: inline-block;'>🎲</span>";
-        break;
-      }
       switch (wasmInterface.js_get_side_to_move()) {
         case "white": {
           switch (gameType) {
-            case "local": case "aiai": statusLabel.innerHTML = "white's move"; break;
-            case "networkH": statusLabel.innerHTML = "your move"; break;
-            case "networkG": statusLabel.innerHTML = "waiting for opponent"; break;
-            case "ai": case "daily": statusLabel.innerHTML = "your move"; break;
+            case "local": case "aiai": statusLabel.innerHTML = "White's move"; break;
+            case "networkH": statusLabel.innerHTML = "Your move"; break;
+            case "networkG": statusLabel.innerHTML = "Waiting for opponent"; break;
+            case "ai": case "daily": statusLabel.innerHTML = "Your move"; break;
           }
           break;
         }
         case "black": {
           switch (gameType) {
-            case "local": case "aiai": statusLabel.innerHTML = "black's move"; break;
-            case "networkH": statusLabel.innerHTML = "waiting for opponent"; break;
-            case "networkG": statusLabel.innerHTML = "your move"; break;
-            case "ai": case "daily": statusLabel.innerHTML = "waiting for computer"; break;
+            case "local": case "aiai": statusLabel.innerHTML = "Black's move"; break;
+            case "networkH": statusLabel.innerHTML = "Waiting for opponent"; break;
+            case "networkG": statusLabel.innerHTML = "Your move"; break;
+            case "ai": case "daily": statusLabel.innerHTML = "Waiting for computer"; break;
           }
           break;
         }
@@ -222,19 +217,19 @@ function updateStatus() {
     }
     case "white": {
       switch (gameType) {
-        case "local": case "aiai": statusLabel.innerHTML = "white wins"; break;
-        case "networkH": statusLabel.innerHTML = "you win"; break;
-        case "networkG": statusLabel.innerHTML = "opponent wins"; break;
-        case "ai": case "daily": statusLabel.innerHTML = "you win"; break;
+        case "local": case "aiai": statusLabel.innerHTML = "White wins"; break;
+        case "networkH": statusLabel.innerHTML = "You win!"; break;
+        case "networkG": statusLabel.innerHTML = "Opponent wins :("; break;
+        case "ai": case "daily": statusLabel.innerHTML = "You win!"; break;
       }
       break;
     }
     case "black": {
       switch (gameType) {
-        case "local": case "aiai": statusLabel.innerHTML = "black wins"; break;
-        case "networkH": statusLabel.innerHTML = "opponent wins"; break;
-        case "networkG": statusLabel.innerHTML = "you win"; break;
-        case "ai": case "daily": statusLabel.innerHTML = "computer wins"; break;
+        case "local": case "aiai": statusLabel.innerHTML = "Black wins"; break;
+        case "networkH": statusLabel.innerHTML = "Opponent wins :("; break;
+        case "networkG": statusLabel.innerHTML = "You win!"; break;
+        case "ai": case "daily": statusLabel.innerHTML = "Computer wins :("; break;
       }
       break;
     }
@@ -372,29 +367,26 @@ canvas.addEventListener('pointerup', event => {
 
 function enactMove(source, dest, anim) {
 
-  if (wasmInterface.js_check_move(source.x, flip(source.y), dest.x, flip(dest.y)) != undefined) {
-    if (wasmInterface.js_check_move(source.x, flip(source.y), dest.x, flip(dest.y))) {
-      const myModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('promotionSelect'));
-      for (let piece of [1, 2, 3, 4]) {
-        document.getElementById("promoOption" + piece).firstChild.src =
-          urlForPiece(
-            wasmInterface.js_get_side_to_move() == "white" ?
-            PIECES[piece] : PIECES[piece + 6]
-          );
-        document.getElementById("promoOption" + piece).onclick = () => {
-          registerMove(source.x, flip(source.y), dest.x, flip(dest.y), piece, true);
-          draw();
-        };
-      }
-      myModal.show();
-    } else {
-      registerMove(source.x, flip(source.y), dest.x, flip(dest.y), undefined, anim);
+  const correctMove = wasmInterface.js_check_move(source.x, flip(source.y), dest.x, flip(dest.y))
+  if (correctMove == undefined) return false
+  if (correctMove) {
+    const myModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('promotionSelect'));
+    for (let piece of [1, 2, 3, 4]) {
+      document.getElementById("promoOption" + piece).firstChild.src =
+        urlForPiece(
+          wasmInterface.js_get_side_to_move() == "white" ?
+          PIECES[piece] : PIECES[piece + 6]
+        );
+      document.getElementById("promoOption" + piece).onclick = () => {
+        registerMove(source.x, flip(source.y), dest.x, flip(dest.y), piece, true);
+        draw();
+      };
     }
-    return true;
+    myModal.show();
   } else {
-    return false;
+      registerMove(source.x, flip(source.y), dest.x, flip(dest.y), undefined, anim);
   }
-
+  return true;
 }
 
 function switchToGameUI() {
@@ -409,7 +401,8 @@ function initLocalGame() {
   if (whiteStarts) { makeAlert("info", "White gets to move first", 5000); }
   else { makeAlert("info", "Black gets to move first", 5000); }
 
-  wasmInterface = JSInterface.js_initial_interface(whiteStarts);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "local";
   awaitingMoveFrom = "ui";
   draw();
@@ -436,7 +429,8 @@ socket.on("hostFailed", (id) => {
 
 socket.on("opponentJoined", (iStart) => {
   switchToGameUI();
-  wasmInterface = JSInterface.js_initial_interface(iStart);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "networkH";
   if (iStart) {
     makeAlert("success", "You get to move first", 5000);
@@ -460,7 +454,8 @@ window.joinGame = joinGame;
 
 socket.on("joined", (iStart) => {
   switchToGameUI();
-  wasmInterface = JSInterface.js_initial_interface(!iStart);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "networkG";
   if (iStart) {
     makeAlert("success", "You get to move first", 5000);
@@ -489,12 +484,6 @@ socket.on("opponentMove", (fromX, fromY, toX, toY, p) => {
   registerMove(fromX, fromY, toX, toY, p, true);
 });
 
-socket.on("isBonus", (isBonus) => {
-  setTimeout(() => {
-    registerRand(isBonus);
-  }, 1000);
-});
-
 function initAIGame() {
   switchToGameUI();
 
@@ -502,7 +491,8 @@ function initAIGame() {
   if (whiteStarts) { makeAlert("info", "You get to move first", 5000); }
   else { makeAlert("info", "The computer gets to move first", 5000); }
 
-  wasmInterface = JSInterface.js_initial_interface(whiteStarts);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "ai";
   awaitingMoveFrom = whiteStarts ? "ui" : "ai";
   draw();
@@ -518,7 +508,8 @@ function initAIvsAIGame() {
   if (whiteStarts) { makeAlert("info", "White gets to move first", 5000); }
   else { makeAlert("info", "Black gets to move first", 5000); }
 
-  wasmInterface = JSInterface.js_initial_interface(whiteStarts);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "aiai";
   awaitingMoveFrom = "ai"
   draw();
@@ -552,7 +543,8 @@ function initDailyGame() {
     makeAlert("info", "The computer gets to move first", 5000);
   }
 
-  wasmInterface = JSInterface.js_initial_interface(whiteStarts);
+  wasmInterface = JSInterface.js_initial_interface();
+  window.wasmInterface = wasmInterface;
   gameType = "daily";
   awaitingMoveFrom = whiteStarts ? "ui" : "ai";
   draw();
@@ -571,19 +563,15 @@ function dispatchAIMove() {
 }
 
 function registerMove(xf, yf, xt, yt, p, anim) {
-  console.assert(awaitingMoveFrom != undefined);
   if (awaitingMoveFrom == "ui" && gameType.startsWith("network")) {
     socket.emit("move", xf, yf, xt, yt, p);
   }
-  awaitingMoveFrom = undefined;
   wasmInterface.js_apply_move(xf, yf, xt, yt, p);
   activeSquares = [];
   activeSquares.push({ x: xf, y: yf });
   activeSquares.push({ x: xt, y: yt });
-  startRandGen();
 
   if (anim) {
-
     pieceAnimation = {
       animation: setInterval(() => { draw(); }, 5),
       start: Date.now(),
@@ -599,79 +587,6 @@ function registerMove(xf, yf, xt, yt, p, anim) {
   }
 
   draw();
-}
-
-var diceAnimation = undefined;
-function startRandGen() {
-  var angle = 0;
-  diceAnimation = setInterval(() => {
-    angle += 3;
-    $("#dice").css('transform','rotate(' + angle + 'deg)');
-  }, 5);
-  if (!gameType.startsWith("network")) {
-    setTimeout(() => {
-      if (gameType == "daily") {
-        registerRand(rng() < CHANCE_OF_BONUS);
-        turns.push(wasmInterface.js_get_side_to_move() == "white" ? "w" : "b");
-      } else {
-        registerRand(Math.random() < CHANCE_OF_BONUS);
-      }
-    }, 1500);
-  }
-}
-
-function stopRandGen() {
-  clearInterval(diceAnimation);
-  diceAnimation = undefined;
-}
-
-function registerRand(isBonus) {
-
-  stopRandGen();
-
-  wasmInterface.js_apply_bonus(isBonus);
-
-  if (isBonus && wasmInterface.js_status() == "in progress") {
-
-    var alertType = "";
-    switch (gameType) {
-      case "local": case "aiai": alertType = "info"; break;
-      case "networkG": {
-        if (wasmInterface.js_get_side_to_move() == "white") alertType = "danger";
-        else alertType = "success";
-        break;
-      }
-      case "networkH":
-      case "ai": case "daily": {
-        if (wasmInterface.js_get_side_to_move() == "white") alertType = "success";
-        else alertType = "danger";
-        break;
-      }
-    }
-
-    var alertText = "";
-    switch (gameType) {
-      case "local": case "aiai": alertText = "Bonus turn for " + wasmInterface.js_get_side_to_move(); break;
-      case "networkG": {
-        if (wasmInterface.js_get_side_to_move() == "white") alertText = "Your opponent got a bonus turn";
-        else alertText = "You got a bonus turn";
-        break;
-      }
-      case "networkH": {
-        if (wasmInterface.js_get_side_to_move() == "white") alertText = "You got a bonus turn";
-        else alertText = "Your opponent got a bonus turn";
-        break;
-      }
-      case "ai": case "daily": {
-        if (wasmInterface.js_get_side_to_move() == "white") alertText = "You got a bonus turn";
-        else alertText = "The computer got a bonus turn";
-        break;
-      }
-    }
-
-    makeAlert(alertType, alertText, 2000);
-
-  }
 
   if (wasmInterface.js_status() == "in progress") {
     switch (gameType) {

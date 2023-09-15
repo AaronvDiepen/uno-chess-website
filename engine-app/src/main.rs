@@ -79,7 +79,7 @@ fn main() {
         cli.timeout,
     );
 
-    let mut board = random_chess::MyBoard::initial_board(cli.starting_color.to_color());
+    let mut board = chess::BoardBuilder::default().try_into().unwrap();
 
     while board.get_status().is_in_progress() {
         if board.get_side_to_move() == cli.engine_color.to_color() {
@@ -151,24 +151,6 @@ fn main() {
         if !board.get_status().is_in_progress() {
             break;
         }
-        let bonus = loop {
-            if !cli.quiet {
-                print!("\"bonus\" or \"no_bonus\": ");
-                std::io::stdout().flush().unwrap();
-            }
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input).unwrap();
-            let bonus = match input.trim() {
-                "bonus" => true,
-                "no_bonus" => false,
-                _ => {
-                    println!("Please enter \"bonus\" or \"no_bonus\".");
-                    continue;
-                }
-            };
-            break bonus;
-        };
-        board.apply_bonus(bonus);
     }
     match board.get_status() {
         Status::Win(White) => {

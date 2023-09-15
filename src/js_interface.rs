@@ -1,53 +1,24 @@
-use chess::{ChessMove, Color::*, Square, ALL_COLORS, ALL_PIECES};
+use chess::{ChessMove, Color::*, Square, ALL_PIECES};
 use js_sys::{Array, JsString};
 use wasm_bindgen::prelude::*;
 
-use crate::{
-    engine::Engine,
-    my_board::{MyBoard, Status},
-};
+use crate::board_manager::{BoardManager, Status};
 
 // TODO: Persist the current game (and possibly other state) between page loads
 
 #[wasm_bindgen]
 pub struct JSInterface {
-    board: MyBoard,
-    engine_black: Box<dyn Engine>,
-    engine_white: Box<dyn Engine>,
-    board_history: Vec<MyBoard>,
+    board: BoardManager,
+    board_history: Vec<BoardManager>,
     move_history: Vec<ChessMove>,
 }
 
 #[wasm_bindgen]
 impl JSInterface {
-    pub fn js_initial_interface(white_starts: bool) -> Self {
+    pub fn js_initial_interface() -> Self {
         crate::utils::set_panic_hook();
-        let weights = crate::engine::feature_eval::Weights {
-            pieces: [[1.0, 3.0, 3.0, 5.0, 9.0, 0.0], [
-                -1.0, -3.0, -3.0, -5.0, -9.0, 0.0,
-            ]],
-            king_danger: [-0.5, 0.5],
-            pawn_advancement: [0.5, -0.5],
-            side_to_move: 3.0,
-        };
         JSInterface {
-            board: MyBoard::initial_board(if white_starts { White } else { Black }),
-            engine_black: Box::new(crate::engine::alphabeta::AlphaBeta::new(
-                crate::engine::feature_eval::FeatureEval::new(weights, 15.0),
-                10,
-                true,
-                false,
-                3,
-                1000,
-            )),
-            engine_white: Box::new(crate::engine::alphabeta::AlphaBeta::new(
-                crate::engine::feature_eval::FeatureEval::new(weights, 15.0),
-                10,
-                true,
-                false,
-                3,
-                1000,
-            )),
+            board: BoardManager::initial_board(),
             board_history: Vec::new(),
             move_history: Vec::new(),
         }
@@ -55,7 +26,7 @@ impl JSInterface {
 
     pub fn js_piece(&self, file: usize, rank: usize) -> Option<JsString> {
         let square = make_square(file, rank);
-        match self.board[square] {
+        match self.board.get_piece(square) {
             Some((p, c)) => Some(p.to_string(c).into()),
             _ => None,
         }
@@ -71,7 +42,7 @@ impl JSInterface {
                     let square = make_square(file, rank);
                     let sq_info = Array::new();
                     sq_info.push(
-                        &match board[square] {
+                        &match board.get_piece(square) {
                             Some((p, c)) => Some(p.to_string(c)),
                             _ => None,
                         }
@@ -93,7 +64,7 @@ impl JSInterface {
 
     pub fn js_piece_color(&self, file: usize, rank: usize) -> JsString {
         let square = make_square(file, rank);
-        match self.board[square] {
+        match self.board.get_piece(square) {
             Some((_, White)) => "white".into(),
             Some((_, Black)) => "black".into(),
             _ => "empty".into(),
@@ -105,14 +76,11 @@ impl JSInterface {
         if !self.board.get_status().is_in_progress() {
             return checked_kings;
         }
-        for c in ALL_COLORS {
-            if self.board.in_check(c) {
-                checked_kings.push(&square_to_array(
-                    self.board
-                        .king_square(c)
-                        .expect("there should be kings on the board"),
-                ));
-            }
+        if self.board.in_check() {
+            checked_kings.push(&square_to_array(
+                self.board
+                    .king_square(self.board.get_side_to_move())
+            ));
         }
         checked_kings
     }
@@ -122,8 +90,7 @@ impl JSInterface {
         let moves = self.board.moves_from(square);
         let js_moves = Array::new();
         for m in moves {
-            let arr_mv = move_to_array(m);
-            arr_mv.push(&self.board.move_is_dangerous(m).into());
+            let arr_mv = move_to_array(*m);
             js_moves.push(&arr_mv);
         }
         js_moves
@@ -140,9 +107,9 @@ impl JSInterface {
         let to = make_square(to_file, to_rank);
         let m = ChessMove::new(from, to, None);
         let mp = ChessMove::new(from, to, Some(ALL_PIECES[1]));
-        if self.board.moves_from(from).contains(&m) {
+        if self.board.all_moves().find(| x | **x == m ).is_some() {
             Some(false)
-        } else if self.board.moves_from(from).contains(&mp) {
+        } else if self.board.all_moves().find(| x | **x == mp ).is_some() {
             Some(true)
         } else {
             None
@@ -157,11 +124,8 @@ impl JSInterface {
         let to = make_square(to_file, to_rank);
         let m = ChessMove::new(from, to, promotion.map(|i| ALL_PIECES[i]));
         self.board.apply_move(m);
-        self.board_history.push(self.board);
         self.move_history.push(m);
     }
-
-    pub fn js_apply_bonus(&mut self, is_bonus: bool) { self.board.apply_bonus(is_bonus); }
 
     pub fn js_get_side_to_move(&self) -> JsString {
         if self.board.get_side_to_move().to_index() == 0 {
@@ -173,12 +137,6 @@ impl JSInterface {
 
     pub fn js_status(&self) -> JsString { self.board.get_status().into() }
 
-    pub fn js_get_engine_move(&mut self) -> Array {
-        move_to_array(match self.board.get_side_to_move() {
-            White => self.engine_white.get_move(&self.board),
-            Black => self.engine_black.get_move(&self.board),
-        })
-    }
 }
 
 impl From<Status> for JsString {

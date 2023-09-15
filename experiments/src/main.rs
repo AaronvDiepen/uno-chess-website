@@ -6,7 +6,7 @@ use std::{
 use chess::{Color, ALL_COLORS};
 use rand::{thread_rng, Rng};
 use random_chess::{
-    bonus_chance, AlphaBeta, Engine, FeatureEval, Features, Logger, MyBoard, ProportionCount,
+    AlphaBeta, Engine, FeatureEval, Features, Logger, ProportionCount,
     StaticEvaluator, Status, Weights,
 };
 
@@ -119,9 +119,9 @@ fn _feature_testing() {
 
 fn _run_single_match(
     white_player: &mut dyn Engine, black_player: &mut dyn Engine,
-) -> (Status, Vec<MyBoard>) {
+) -> (Status, Vec<Board>) {
     let mut rng = thread_rng();
-    let mut board = MyBoard::initial_board(ALL_COLORS[rng.gen_range(0..=1)]);
+    let mut board = Board::initial_board();
     let mut boards = vec![board];
 
     loop {
@@ -136,7 +136,6 @@ fn _run_single_match(
         };
 
         board.apply_move(mv);
-        board.apply_bonus(rng.gen_bool(bonus_chance().into()));
         boards.push(board);
     }
     (board.get_status(), boards)
